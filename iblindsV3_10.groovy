@@ -114,7 +114,7 @@ private dimmerEvents(hubitat.zwave.Command cmd) {
    Integer position = cmd.value as Integer
    String switchValue = "off"
    String windowShadeState = "closed"
-   if (position > 0 && position < 100) {
+   if (position > 0 && position < 99) {
       switchValue = "on"
       windowShadeState = "open"
    } 
@@ -169,27 +169,30 @@ def setPosition(value) {
 }
 
 def setLevel(value, duration=0) {
+    def origLevel = Math.max(Math.min(value as Integer, 100), 0) //For UI purposes to keep between 0-100
+    def level = Math.max(Math.min(value as Integer, 99), 0) //Adjust for commands
+    def SetLevel = origLevel == 100 ? NVM_Target_Value : level //Used for Homekit Integration. When blind is tapped, it sends "level=100", not "open"
+    def revSetLevel = reverse ? 99 - SetLevel : SetLevel
     if (logEnable) log.debug "setLevel >> value: $value, duration: $duration"
-    if (logInfoEnable) log.info "$device.label setLevel >> value: $value, duration: $duration"
-    def level = Math.max(Math.min(value as Integer, 99), 0)
+    if (logInfoEnable) log.info "$device.label setLevel >> value: $fullLevel, duration: $duration"
     
-    if (level <= 0 || level >= 99) {
+    if (origLevel <= 0 || origLevel >= 99) {
          sendEvent(name: "switch", value: "off")
          sendEvent(name: "windowShade", value: "closed")
     } else {
         sendEvent(name: "switch", value: "on")
         sendEvent(name: "windowShade", value: "open")
     }
-    sendEvent(name: "level", value: level, unit: "%")
-    sendEvent(name: "position", value: level, unit: "%")
+    sendEvent(name: "level", value: SetLevel, unit: "%")
+    sendEvent(name: "position", value: SetLevel, unit: "%")
     durationTime = duration as Integer
     if (durationTime > 1){
         state.durationActive = true
         runIn(durationTime,endDuration)
     }
-    def setLevel = reverse ? 99 - level : level
+
     def dimmingDuration = duration < 128 ? duration : 128 + Math.round(duration / 60)
-    zwave.switchMultilevelV2.switchMultilevelSet(value: setLevel, dimmingDuration: dimmingDuration).format()
+    zwave.switchMultilevelV2.switchMultilevelSet(value: revSetLevel, dimmingDuration: dimmingDuration).format()
 }
 
 def endDuration(){
@@ -209,7 +212,7 @@ def stopPositionChange() {
 
 def startPositionChange(direction) {
     if (direction == "open") {
-        open()
+       open()
     } else {
        close()
     }
